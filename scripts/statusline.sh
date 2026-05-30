@@ -118,20 +118,25 @@ fi
 narrow=0
 (( cols < 80 )) && narrow=1
 
-# Context bar: "ctx: [████░░░░░░] 42%" — desktop only.
+# Context: "ctx: [████░░░░░░] 42%" on desktop, bare "ctx: 42%" on phone (the
+# bar costs ~13 cols we don't have on narrow screens, but the % is worth keeping).
 ctx_segment=""
-if [[ -n "$ctx_raw" && "$ctx_raw" != "null" ]] && (( ! narrow )); then
+if [[ -n "$ctx_raw" && "$ctx_raw" != "null" ]]; then
     pct="$(printf '%.0f' "$ctx_raw" 2>/dev/null || echo 0)"
     (( pct < 0 )) && pct=0
     (( pct > 100 )) && pct=100
-    filled=$(( (pct + 5) / 10 ))
-    (( filled < 0 )) && filled=0
-    (( filled > 10 )) && filled=10
-    empty=$(( 10 - filled ))
-    bar=""
-    for ((i=0; i<filled; i++)); do bar+="█"; done
-    for ((i=0; i<empty;  i++)); do bar+="░"; done
-    ctx_segment="${DIM}ctx:${RESET} [$(pct_color "$pct")${bar}${RESET}] ${pct}%"
+    if (( narrow )); then
+        ctx_segment="${DIM}ctx:${RESET} $(pct_color "$pct")${pct}%${RESET}"
+    else
+        filled=$(( (pct + 5) / 10 ))
+        (( filled < 0 )) && filled=0
+        (( filled > 10 )) && filled=10
+        empty=$(( 10 - filled ))
+        bar=""
+        for ((i=0; i<filled; i++)); do bar+="█"; done
+        for ((i=0; i<empty;  i++)); do bar+="░"; done
+        ctx_segment="${DIM}ctx:${RESET} [$(pct_color "$pct")${bar}${RESET}] ${pct}%"
+    fi
 fi
 
 # --- Group A: location + git ---
@@ -156,25 +161,31 @@ if (( ${#rl_parts[@]} > 0 )); then
     gC="${DIM}lmt:${RESET} $(join_with " · " "${rl_parts[@]}")"
 fi
 
-# Assemble line 1: non-empty groups joined by a dim separator.
 gA="$(join_with "  " "${gA_parts[@]+"${gA_parts[@]}"}")"
 gB="$(join_with "  " "${gB_parts[@]+"${gB_parts[@]}"}")"
+
+if (( narrow )); then
+    # Phone / narrow terminal: trade horizontal for vertical space. Each group
+    # gets its own line so nothing is pushed off the right edge and truncated.
+    # The two rate limits fit comfortably together, so they share one line.
+    [[ -n "$gA" ]] && printf '%b\n' "$gA"
+    [[ -n "$gB" ]] && printf '%b\n' "$gB"
+    [[ -n "$gC" ]] && printf '%b\n' "$gC"
+    exit 0
+fi
+
+# Wide terminal: single status line (groups joined by a dim separator) + hint.
 groups=()
 [[ -n "$gA" ]] && groups+=("$gA")
 [[ -n "$gB" ]] && groups+=("$gB")
 [[ -n "$gC" ]] && groups+=("$gC")
 status="$(join_with " ${DIM}│${RESET} " "${groups[@]+"${groups[@]}"}")"
 
-# Line 2: hint line — Claude commands always; tmux shortcuts only when in tmux.
-# Dropped entirely when space is constrained.
-shortcuts=""
-if (( ! narrow )); then
-    hint="hint: /model · /effort · /exit · ! <cmd> = run terminal command"
-    if [[ -n "${TMUX:-}" ]]; then
-        hint="${hint} · Ctrl+b → d:leave tmux session · Ctrl+b → s:switch tmux session"
-    fi
-    shortcuts="${DIM}${ITALIC}${hint}${RESET}"
+hint="hint: /model · /effort · /exit · ! <cmd> = run terminal command"
+if [[ -n "${TMUX:-}" ]]; then
+    hint="${hint} · Ctrl+b → d:leave tmux session · Ctrl+b → s:switch tmux session"
 fi
+shortcuts="${DIM}${ITALIC}${hint}${RESET}"
 
 [[ -n "$status"    ]] && printf '%b\n' "$status"
 [[ -n "$shortcuts" ]] && printf '%b\n' "$shortcuts"
