@@ -1,12 +1,14 @@
-# claude-code-machine-setup
+# coding-agent-machine-setup
 
 Turn a fresh Linux box (VM, LXC container, server) into a comfortable
+[Codex](https://developers.openai.com/codex/) and/or
 [Claude Code](https://claude.com/claude-code) working environment in one go:
 
 - 🔑 **SSH key login via 1Password** — key lives in the 1Password SSH agent, unlocked by Touch ID / your vault, never on disk.
 - 🪟 **tmux + an interactive login session picker** — every SSH login lands on a menu: attach an existing session, jump straight into a project, start a new named session, or drop to a plain shell.
 - 🖱 **tmux copy / scrollback / history tuning** — mouse selection + wheel scrollback, 50k-line history.
-- 📊 **A custom Claude Code statusline** — directory, git repo + branch, model, effort, a context-usage bar, and color-coded rate-limit meters with reset countdowns, plus an italic hint line of handy commands.
+- 📊 **Agent-native status information** — Codex gets a native footer with directory, Git branch, model/reasoning, and context remaining; Claude Code keeps the custom two-line statusline with rate-limit meters.
+- 🧭 **Native instruction files** — `AGENTS.md` for Codex and `CLAUDE.md` for Claude Code carry equivalent repository guidance.
 
 It's all small, readable shell — no frameworks, no daemons.
 
@@ -39,6 +41,17 @@ cd claude-code-bootstrap
 ./setup.sh
 ```
 
+Choose a specific agent when desired:
+
+```bash
+./setup.sh --codex
+./setup.sh --claude
+./setup.sh --both
+```
+
+With no flag, the installer detects installed agents; if neither is present it
+defaults to Codex setup.
+
 The installer is interactive and conservative: it shows what it changes, skips
 anything already done, asks before installing packages, and **never disables SSH
 password auth for you** (do that yourself once key login is confirmed). It will:
@@ -47,18 +60,22 @@ password auth for you** (do that yourself once key login is confirmed). It will:
 2. Optionally add a public key to `~/.ssh/authorized_keys` (and print the laptop-side 1Password steps).
 3. Write `~/.tmux-login.sh` with the projects you enter, and wire the guarded hook into `~/.profile`.
 4. Install `~/.tmux.conf` (or merge in the mouse + history settings).
-5. Install `~/.claude/statusline.sh` and register it in `~/.claude/settings.json`.
+5. Configure Codex's native footer in `~/.codex/config.toml`, install Claude's
+   custom statusline, or both, according to the selected mode.
 
 > **Test from a second SSH session.** Because this touches the login path, open a
 > new terminal and confirm everything works **while keeping your current session
 > open** as a safety net.
 
-## Prefer to let Claude do it?
+## Prefer to let an agent do it?
 
 `prompts/machine-setup.md` is the same setup written as a prompt you paste into
 **Claude Code running on the new machine**. It walks through each part
 interactively, asks before risky actions, and is handy when a machine's quirks
 need judgment the installer doesn't have.
+
+For Codex, use `prompts/codex-machine-setup.md`. Codex also reads this
+repository's `AGENTS.md` automatically.
 
 ## What goes where
 
@@ -68,8 +85,10 @@ need judgment the installer doesn't have.
 | `scripts/profile-snippet.sh` | appended to `~/.profile` | Guarded hook that sources the picker on interactive SSH logins. |
 | `scripts/tmux.conf`        | `~/.tmux.conf`            | Mouse, 50k scrollback, copy-mode notes. |
 | `scripts/statusline.sh`    | `~/.claude/statusline.sh` | The Claude Code statusline (bash). |
+| native Codex configuration | `~/.codex/config.toml` | Codex footer; no wrapper script required. |
 | `setup.sh`                 | —                         | Interactive installer that wires it all up. |
 | `prompts/machine-setup.md` | —                         | The "let Claude set it up" prompt. |
+| `prompts/codex-machine-setup.md` | —                    | The equivalent Codex setup prompt. |
 
 ## Customizing
 
@@ -79,6 +98,9 @@ need judgment the installer doesn't have.
 - **Statusline colors / thresholds:** the ANSI block and `pct_color()` near the
   top of `~/.claude/statusline.sh`. It auto-folds (drops the context bar + hint
   line) under 80 columns.
+- **Codex footer:** edit `tui.status_line` in `~/.codex/config.toml`. Run
+  `/status` for full session configuration and `/model` to change model or
+  reasoning effort.
 - **tmux clipboard / vi keys:** uncomment the optional lines at the bottom of
   `~/.tmux.conf`, then `tmux source-file ~/.tmux.conf`.
 

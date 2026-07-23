@@ -5,9 +5,9 @@ Guidance for Claude Code (and humans) working in this repo.
 ## What this repo is
 
 A small collection of shell scripts + an installer that set up a standard Claude
-Code working environment on a fresh Linux machine: a tmux login session picker, a
-custom Claude Code statusline, tmux copy/scrollback config, and 1Password-backed
-SSH key login. No build system, no dependencies beyond `tmux`, `jq`, `git`.
+Code and/or Codex working environment on a fresh Linux machine: a tmux login
+session picker, agent status information, tmux copy/scrollback config, and
+1Password-backed SSH key login. No build system.
 
 ## Layout
 
@@ -18,6 +18,8 @@ SSH key login. No build system, no dependencies beyond `tmux`, `jq`, `git`.
   **does** embed the script bodies (so it's self-contained when pasted into a
   fresh machine). If you change a script in `scripts/`, update the embedded copy
   in this prompt to match.
+- `AGENTS.md` — the equivalent repository guidance Codex loads automatically.
+- `prompts/codex-machine-setup.md` — a Codex-native setup prompt.
 
 ## Conventions
 
@@ -61,3 +63,5 @@ printf 's\n' | sh scripts/tmux-login.sh
 
 When changing the statusline's fields or layout, re-test all four cases above and
 confirm exit status 0.
+
+Run `./tests/test.sh` for the complete regression check.
