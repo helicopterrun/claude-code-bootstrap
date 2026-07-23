@@ -27,11 +27,77 @@ confirm() { # confirm "prompt" -> returns 0 if yes
 	local a; a="$(ask "$1 (y/N)" "")"; case "$a" in y|Y|yes|YES) return 0;; *) return 1;; esac
 }
 
+write_codex_status() {
+	local config="$1" tmp
+	local value='status_line = ["current-dir", "git-branch", "model-with-reasoning", "context-remaining"]'
+	mkdir -p "$(dirname "$config")"
+	[ -f "$config" ] || : > "$config"
+	tmp="$(mktemp)"
+	awk -v value="$value" '
+		BEGIN { in_tui=0; saw_tui=0; wrote=0 }
+		/^[[:space:]]*\[[^]]+\][[:space:]]*$/ {
+			if (in_tui && !wrote) { print value; wrote=1 }
+			in_tui = ($0 ~ /^[[:space:]]*\[tui\][[:space:]]*$/)
+			if (in_tui) saw_tui=1
+		}
+		in_tui && /^[[:space:]]*status_line[[:space:]]*=/ {
+			if (!wrote) { print value; wrote=1 }
+			next
+		}
+		{ print }
+		END {
+			if (in_tui && !wrote) print value
+			if (!saw_tui) {
+				print ""
+				print "[tui]"
+				print value
+			}
+		}
+	' "$config" > "$tmp" && mv "$tmp" "$config"
+}
+
+if [ "${1:-}" = "--write-codex-status" ]; then
+	[ -n "${2:-}" ] || { echo "usage: $0 --write-codex-status CONFIG"; exit 2; }
+	write_codex_status "$2"
+	exit 0
+fi
+
+mode="auto"
+case "${1:-}" in
+	"") ;;
+	--codex) mode="codex" ;;
+	--claude) mode="claude" ;;
+	--both) mode="both" ;;
+	-h|--help)
+		echo "usage: $0 [--codex|--claude|--both]"
+		exit 0
+		;;
+	*) echo "unknown option: $1" >&2; exit 2 ;;
+esac
+
 [ -d "$SCRIPTS" ] || { printf '%s\n' "${c_red}error:${c_rst} run this from the cloned repo (scripts/ not found next to setup.sh)"; exit 1; }
 
-printf '\n%s\n\n' "${c_bold}Claude Code machine setup${c_rst}"
+printf '\n%s\n\n' "${c_bold}AI coding agent machine setup${c_rst}"
 note "Files this can create/modify:"
-note "  ~/.tmux-login.sh, ~/.profile, ~/.claude/statusline.sh, ~/.claude/settings.json, ~/.ssh/authorized_keys"
+note "  ~/.tmux-login.sh, ~/.profile, ~/.tmux.conf, ~/.codex/config.toml,"
+note "  ~/.claude/statusline.sh, ~/.claude/settings.json, ~/.ssh/authorized_keys"
+echo
+
+if [ "$mode" = "auto" ]; then
+	if command -v codex >/dev/null 2>&1 && command -v claude >/dev/null 2>&1; then mode="both"
+	elif command -v codex >/dev/null 2>&1; then mode="codex"
+	elif command -v claude >/dev/null 2>&1; then mode="claude"
+	else mode="codex"
+	fi
+fi
+
+want_codex=0; want_claude=0
+case "$mode" in
+	codex) want_codex=1 ;;
+	claude) want_claude=1 ;;
+	both) want_codex=1; want_claude=1 ;;
+esac
+note "agent mode: $mode"
 echo
 
 # --- Part 0: prerequisites -------------------------------------------------
@@ -146,28 +212,52 @@ fi
 note "Reload in a running tmux with:  tmux source-file ~/.tmux.conf"
 echo
 
-# --- Part 3: statusline ----------------------------------------------------
-say "Claude Code statusline (~/.claude/statusline.sh)"
-mkdir -p "$HOME/.claude"
-install -m 0755 "$SCRIPTS/statusline.sh" "$HOME/.claude/statusline.sh"
-ok "installed ~/.claude/statusline.sh"
-
-settings="$HOME/.claude/settings.json"
-[ -f "$settings" ] || echo '{}' > "$settings"
-if command -v jq >/dev/null 2>&1; then
-	tmp="$(mktemp)"
-	if jq '.statusLine = {type:"command", command:"~/.claude/statusline.sh", padding:0}' "$settings" > "$tmp" 2>/dev/null; then
-		mv "$tmp" "$settings"; ok "registered statusLine in settings.json"
+# --- Part 3: agent status information --------------------------------------
+if [ "$want_codex" = 1 ]; then
+	say "Codex CLI"
+	if command -v codex >/dev/null 2>&1; then
+		ok "found $(codex --version 2>/dev/null || echo codex)"
 	else
-		rm -f "$tmp"; warn "couldn't parse $settings — add the statusLine block manually (see README)"
+		warn "Codex is not installed."
+		note "Official installer: curl -fsSL https://chatgpt.com/codex/install.sh | sh"
+		note "Install it, then re-run this setup. It is not run automatically."
 	fi
-else
-	warn "jq missing — add the statusLine block to $settings manually (see README)"
+	codex_config="${CODEX_HOME:-$HOME/.codex}/config.toml"
+	if write_codex_status "$codex_config"; then
+		ok "configured Codex native footer in $codex_config"
+		note "footer: directory · git branch · model/reasoning · context remaining"
+	else
+		warn "couldn't update $codex_config"
+	fi
+	note "Run 'codex login' if needed, then start Codex in a project directory."
+	note "Useful commands: /status · /model · /permissions · /review · /exit"
+	echo
 fi
-echo
+
+if [ "$want_claude" = 1 ]; then
+	say "Claude Code statusline (~/.claude/statusline.sh)"
+	mkdir -p "$HOME/.claude"
+	install -m 0755 "$SCRIPTS/statusline.sh" "$HOME/.claude/statusline.sh"
+	ok "installed ~/.claude/statusline.sh"
+
+	settings="$HOME/.claude/settings.json"
+	[ -f "$settings" ] || echo '{}' > "$settings"
+	if command -v jq >/dev/null 2>&1; then
+		tmp="$(mktemp)"
+		if jq '.statusLine = {type:"command", command:"~/.claude/statusline.sh", padding:0}' "$settings" > "$tmp" 2>/dev/null; then
+			mv "$tmp" "$settings"; ok "registered statusLine in settings.json"
+		else
+			rm -f "$tmp"; warn "couldn't parse $settings — add the statusLine block manually (see README)"
+		fi
+	else
+		warn "jq missing — add the statusLine block to $settings manually (see README)"
+	fi
+	echo
+fi
 
 # --- Done ------------------------------------------------------------------
 say "Done"
 ok "Open a NEW SSH session to see the tmux picker (keep this one open as a safety net)."
-ok "The statusline appears at the bottom of Claude Code on its next render."
+[ "$want_codex" = 1 ] && ok "The configured footer appears in the next Codex session."
+[ "$want_claude" = 1 ] && ok "The statusline appears at the bottom of Claude Code on its next render."
 note "Add projects later by editing the projects=\"...\" block in ~/.tmux-login.sh."
