@@ -103,7 +103,8 @@ echo
 # --- Part 0: prerequisites -------------------------------------------------
 say "Checking prerequisites (tmux, jq, git)"
 PKG=""
-if   command -v apt-get >/dev/null 2>&1; then PKG="sudo apt-get install -y"
+if   command -v brew    >/dev/null 2>&1; then PKG="brew install"
+elif command -v apt-get >/dev/null 2>&1; then PKG="sudo apt-get install -y"
 elif command -v dnf     >/dev/null 2>&1; then PKG="sudo dnf install -y"
 elif command -v pacman  >/dev/null 2>&1; then PKG="sudo pacman -S --noconfirm"
 elif command -v apk     >/dev/null 2>&1; then PKG="sudo apk add"
